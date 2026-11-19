@@ -51,6 +51,7 @@ small,.muted{color:var(--muted);font-size:13px}
 .chip{flex:none;border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:20px;padding:7px 13px;font-size:14px}
 .chip.on{background:var(--olive);color:#fff;border-color:var(--olive)}
 .pc{display:flex;align-items:center;gap:12px;background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:11px 12px;margin:8px 0;width:100%;text-align:left;color:inherit;font:inherit}
+.pc.aus{opacity:.55;border-style:dashed}
 .pc.alerta{border-color:var(--alert);box-shadow:inset 4px 0 0 var(--alert)}
 .av{width:42px;height:42px;border-radius:50%;display:grid;place-items:center;font-weight:800;color:#fff;flex:none;font-size:15px}
 .bg-D{background:var(--D)}.bg-I{background:var(--I)}.bg-E{background:var(--E)}.bg-A{background:var(--A)}
@@ -644,7 +645,7 @@ const P=o=>Object.assign({doenca:"",medicacao:"",alergiaMed:"",alergias:"",alerg
 /* Sem dados pessoais no app: a lista de alunos vem do arquivo importado (EVO_Echo_alunos.json). */
 /* ================== BANCO LOCAL ================== */
 const KEY="evo_echo_nov26_v1";
-const APPV="0.3";
+const APPV="0.3.3";
 let storageOk=true;
 function fresh(){return{version:2,patrulha:"Echo",participantes:[],info:null,registros:{},debriefs:{},ocorrencias:[],savedAt:0,config:{autor:"",autores:[],ativ:0,tema:"light",lastExport:0}}}
 function load(){try{localStorage.setItem(KEY+"_t","1");localStorage.removeItem(KEY+"_t");const s=localStorage.getItem(KEY);if(s)return JSON.parse(s)}catch(e){storageOk=false}return null}
@@ -682,6 +683,7 @@ function pb(p,i){const r=(PB[prim(p)]||PB.E)[i];return r.map(x=>g(p,x).replace("
 function baseTxt(p){const [a,b]=String(p.disc).split("/");const B=BASE[a]||BASE.E;return{t:B.t+(b&&SEC[b]?", "+SEC[b]:""),p:B.p,l:g(p,B.l)}}
 function saudeAtiv(p,i){const o=[];if(p.pendente)o.push("Pendente: sem dados de saúde informados.");if(p.medicacao&&i===1)o.push("Garantir a medicação no horário durante o descanso.");if(p.alergiaInseto&&[0,3,4,8].includes(i))o.push("Alergia a picada de inseto: anti-alérgico com o staff.");return o}
 function atencoes(p){const a=[];
+ if(p.ausente)a.push({t:"alert",x:"AUSENTE"+(p.ausenteEm?" desde "+fmtDT(p.ausenteEm):"")+(p.ausenteMotivo?" · "+p.ausenteMotivo:"")});
  if(p.pendente)a.push({t:"alert",x:"DADOS PENDENTES: "+(p.pendenteTxt||"completar com a coordenação")});
  if(p.idade&&p.idade<18)a.push({t:"alert",x:"Menor de idade: confirmar autorização do responsável."});
  if(p.alergiaMed)a.push({t:"alert",x:"Alergia a medicamento: "+p.alergiaMed+". Equipe médica deve saber antes de qualquer medicação."});
@@ -694,6 +696,7 @@ function atencoes(p){const a=[];
  const pr=peers(p);if(pr.length)a.push({t:"info",x:`Convive com outros perfis ${DISCN[prim(p)]||""} (${joinPt(pr)}): dinâmica tende a aparecer na pista de liderança e na orientação.`});
  return a}
 function tags(p){const t=[];
+ if(p.ausente)t.push('<span class="tag a">⛔ ausente</span>');
  if(p.pendente)t.push('<span class="tag a">? pendente</span>');
  if(p.idade&&p.idade<18)t.push('<span class="tag a">menor</span>');
  if(p.alergiaMed)t.push('<span class="tag a">alergia med.</span>');
@@ -745,20 +748,20 @@ function vAlunos(){
   <label class="btn full" style="display:block">📥 Importar lista de alunos<input type="file" accept=".json,.csv,application/json,text/csv" class="impFile" hidden></label>
   <label class="btn sec full" style="display:block">♻️ Restaurar backup (.json)<input type="file" accept=".json,application/json" class="impFile" hidden></label>
   <div class="tip" style="text-align:left">Os dados ficam só neste aparelho. Para eles voltarem ao reabrir, abra o app <b>sempre do mesmo jeito</b>: pelo mesmo link ou pelo mesmo arquivo no Chrome (Android). No iPhone, use o link.</div></div>`;
- const a=db.config.ativ,tot=db.participantes.length,done=db.participantes.filter(p=>filled(p.id,a)).length;
- const F=[["todos","Todos"],["D","D · Dominante"],["I","I · Influente"],["E","E · Estável"],["A","A · Analítico"],["atencao","⚠ Saúde/atenção"],["alerta","🚨 Alertas"],["sem","○ Sem registro"]];
+ const a=db.config.ativ,pres=db.participantes.filter(p=>!p.ausente),aus=db.participantes.length-pres.length,tot=pres.length,done=pres.filter(p=>filled(p.id,a)).length;
+ const F=[["todos","Todos"],["D","D · Dominante"],["I","I · Influente"],["E","E · Estável"],["A","A · Analítico"],["atencao","⚠ Saúde/atenção"],["alerta","🚨 Alertas"],["sem","○ Sem registro"],["aus","⛔ Ausentes"]];
  return `<section class="now"><label>Atividade agora</label>
   <select data-act="ativ">${ATIV.map((x,i)=>`<option value="${i}" ${i===a?"selected":""}>${x.d}º dia · ${esc(x.n)}</option>`).join("")}</select>
-  <div class="prog"><div style="width:${tot?done/tot*100:0}%"></div></div><small>${done} de ${tot} alunos com registro nesta atividade</small></section>
+  <div class="prog"><div style="width:${tot?done/tot*100:0}%"></div></div><small>${done} de ${tot} presentes com registro nesta atividade${aus?` · ${aus} ausente${aus>1?"s":""}`:""}</small></section>
   <input id="busca" type="search" placeholder="🔎  Buscar aluno…" value="${esc(state.q)}" autocomplete="off">
   <div class="chips">${F.map(([k,l])=>`<button class="chip ${state.f===k?"on":""}" data-act="filtro" data-v="${k}">${l}</button>`).join("")}</div>
   <div id="lista"></div>
   <button class="btn ghost full" data-act="editAluno" data-v="">+ Adicionar aluno</button>`}
 function renderLista(){
  const el=$("#lista");if(!el)return;const a=db.config.ativ,q=norm(state.q),f=state.f;
- const list=sorted().filter(p=>(!q||norm(p.nome).includes(q))&&(f==="todos"||(f==="atencao"?atencoes(p).some(x=>x.t!=="info"):f==="alerta"?hasAlerta(p.id):f==="sem"?!filled(p.id,a):prim(p)===f)));
+ const list=sorted().sort((x,y)=>(x.ausente?1:0)-(y.ausente?1:0)).filter(p=>(!q||norm(p.nome).includes(q))&&(f==="aus"?p.ausente:f==="todos"||(f==="atencao"?atencoes(p).some(x=>x.t!=="info"):f==="alerta"?hasAlerta(p.id):f==="sem"?!p.ausente&&!filled(p.id,a):prim(p)===f)));
  el.innerHTML=list.map(p=>{const ok=filled(p.id,a),al=hasAlerta(p.id);
-  return `<button class="pc ${al?"alerta":""}" data-act="abrir" data-v="${p.id}">
+  return `<button class="pc ${al?"alerta":""} ${p.ausente?"aus":""}" data-act="abrir" data-v="${p.id}">
    <div class="av bg-${prim(p)}">${p.n}</div>
    <div style="min-width:0"><div class="nm">${esc(p.nome)}</div>
     <div class="mt">${p.idade??"idade ?"} · ${p.sexo} · ${discHTML(p.disc)} ${al?'<span class="tag a">🚨 alerta</span>':""}</div>
@@ -788,9 +791,10 @@ function renderDetail(){
     ${formReg("reg",k,r,i)}
    </div></details>`}).join("");
  const html=`<div class="lh"><button class="back" data-act="voltar" aria-label="Voltar">‹</button>
-   <div><div class="t">${p.n}. ${esc(p.nome)}</div><div class="s">${p.idade??"idade ?"} anos · ${p.sexo==="F"?"Feminino":"Masculino"} · ${String(p.disc).split("/").map(l=>DISCN[l]||l).join(" / ")}</div></div>
+   <div><div class="t">${p.n}. ${esc(p.nome)}</div><div class="s">${p.ausente?"⛔ AUSENTE · ":""}${p.idade??"idade ?"} anos · ${p.sexo==="F"?"Feminino":"Masculino"} · ${String(p.disc).split("/").map(l=>DISCN[l]||l).join(" / ")}</div></div>
    <button class="ed" data-act="editAluno" data-v="${p.id}">Editar</button></div>
   <div class="in"><main>
+   ${p.ausente?`<button class="btn full" style="margin:0 0 10px" data-act="presente" data-v="${p.id}">✅ Marcar como presente</button>`:`<button class="btn sec full" style="margin:0 0 10px" data-act="ausente" data-v="${p.id}">⛔ Marcar como ausente</button>`}
    <div class="card"><dl class="kv"><dt>Tende a</dt><dd>${esc(B.t)}</dd><dt>Sob pressão</dt><dd>${esc(B.p)}</dd><dt>Lacuna</dt><dd>${esc(B.l)}</dd></dl></div>
    ${at.length?`<h2>Saúde e atenção</h2>${at.map(x=>`<div class="att ${x.t}">${esc(x.x)}</div>`).join("")}`:""}
    ${p.notas?`<div class="card"><b class="muted" style="font-size:12px">NOTAS DO STAFF</b><div>${esc(p.notas).replace(/\n/g,"<br>")}</div></div>`:""}
@@ -822,7 +826,7 @@ function vPatrulha(){
  const media=ids.length?(ids.reduce((a,b)=>a+b,0)/ids.length).toFixed(1).replace(".",","):"–";
  const bars=["D","I","E","A"].map(L=>{const g=sorted().filter(p=>prim(p)===L);return `<div class="bar"><span class="lb" style="color:var(--${L})">${L}</span><div class="tr"><div class="bg-${L}" style="width:${ps.length?g.length/ps.length*100:0}%"></div></div><b>${g.length}</b></div><div class="muted" style="margin:-4px 0 8px 30px">${g.map(p=>esc(p.curto)+(p.idade?` (${p.idade})`:"")).join(", ")||"–"}</div>`}).join("");
  const sem=state.debSem;
- const cav=DIAS.map(D=>{const n=debCount(D.d),tot=ps.length,geral=debOf(D.d,"geral").length;
+ const cav=DIAS.map(D=>{const n=debCount(D.d),tot=ps.filter(p=>!p.ausente).length,geral=debOf(D.d,"geral").length;
   const rows=sorted().filter(p=>!sem||!debFilled(D.d,p.id)).map(p=>{const ok=debFilled(D.d,p.id),al=debOf(D.d,p.id).some(x=>x.alerta);
    return `<button class="pc ${al?"alerta":""}" style="padding:8px 10px" data-act="debAbrir" data-v="${D.d}|${p.id}"><div class="av bg-${prim(p)}" style="width:34px;height:34px;font-size:13px">${p.n}</div><div style="min-width:0"><div class="nm">${esc(p.nome)}</div><div class="mt">${discHTML(p.disc)}${al?' <span class="tag a">🚨 alerta</span>':""}</div></div><div class="st ${ok?"ok":""}"><b>${ok?"✓":"○"}</b></div></button>`}).join("")||`<p class="empty">Todos preenchidos ✓</p>`;
   return `<details class="ac" data-dia="${D.d}" ${state.debOpen===D.d?"open":""}><summary><span class="d">${D.d}º dia</span><span class="n">${esc(D.n)}<small class="muted">${n}/${tot} preenchidos</small></span><span class="ok">${tot&&n===tot?"✓":""}</span></summary><div class="body">
@@ -832,7 +836,7 @@ function vPatrulha(){
    ${rows}
    <button class="btn ghost full" data-act="debAbrir" data-v="${D.d}|geral">📝 Observação geral da patrulha${geral?" ✓":""}</button>
   </div></details>`}).join("");
- return `<div class="card"><b>${ps.length} alunos</b> · ${f} mulheres e ${ps.length-f} homens · ${ids.length?Math.min(...ids)+" a "+Math.max(...ids)+" anos (média "+media+")":""}${db.info&&db.info.staffNomes?`<div class="muted" style="margin-top:4px">Staff: ${esc(db.info.staffNomes)}</div>`:""}</div>
+ return `<div class="card"><b>${ps.length} alunos</b>${ps.some(p=>p.ausente)?` (${ps.filter(p=>!p.ausente).length} presentes)`:""} · ${f} mulheres e ${ps.length-f} homens · ${ids.length?Math.min(...ids)+" a "+Math.max(...ids)+" anos (média "+media+")":""}${db.info&&db.info.staffNomes?`<div class="muted" style="margin-top:4px">Staff: ${esc(db.info.staffNomes)}</div>`:""}</div>
   <h2>Perfis DISC</h2><div class="card">${bars}</div>
   <h2>CAV do dia · por participante</h2>
   <div class="chips"><button class="chip ${!sem?"on":""}" data-act="debSem" data-v="0">Todos</button><button class="chip ${sem?"on":""}" data-act="debSem" data-v="1">○ Sem registro</button></div>
@@ -942,6 +946,8 @@ function alunoModal(id){
   ${T("alergiaMed","Alergia a medicamento")}${T("alergias","Outras alergias")}
   <label class="chk" style="background:var(--warnbg);color:var(--warn)"><input type="checkbox" data-f="alergiaInseto" ${p.alergiaInseto?"checked":""}> Alergia a picada de inseto (anti-alérgico com o staff)</label>
   ${T("restricao","Restrição alimentar (cozinha)")}${A("vinculo","Vínculo no evento")}${A("extras","Atenção do staff (uma por linha)")}
+  <label class="chk"><input type="checkbox" data-f="ausente" ${p.ausente?"checked":""}> ⛔ Ausente</label>
+  ${T("ausenteMotivo","Motivo da ausência","opcional")}
   <label class="chk"><input type="checkbox" data-f="pendente" ${p.pendente?"checked":""}> Dados pendentes</label>
   ${T("pendenteTxt","O que falta")}${A("notas","Notas livres do staff")}
  </div>
@@ -952,7 +958,7 @@ function salvarAluno(){
  const f=$("#fa"),id=f.dataset.id;let p=byId(id);const novo=!p;if(novo)p=P({id});
  f.querySelectorAll("[data-f]").forEach(el=>{const k=el.dataset.f;let v=el.type==="checkbox"?el.checked:el.value.trim();if(k==="idade")v=v?parseInt(v,10)||null:null;if(k==="n")v=parseInt(v,10)||p.n;if(k==="disc")v=v.toUpperCase().replace(/\s/g,"");p[k]=v});
  if(!p.nome)return toast("Informe o nome");if(!p.curto)p.curto=p.nome.split(" ")[0];
- p.updatedAt=Date.now();if(novo)db.participantes.push(p);persist(true);closeModal();toast("Dados salvos ✓");
+ if(p.ausente&&!p.ausenteEm)p.ausenteEm=nowLocal();if(!p.ausente)p.ausenteEm="";p.updatedAt=Date.now();if(novo)db.participantes.push(p);persist(true);closeModal();toast("Dados salvos ✓");
  if(state.detail)renderDetail();else render()}
 
 /* ---------- DADOS ---------- */
@@ -1003,11 +1009,11 @@ function merge(inc){
  persist(true);return n}
 
 /* ---------- CSV ---------- */
-const CSV_COLS=["tipo","autor","aluno_id","aluno_n","aluno_nome","dia","atividade_idx","atividade","data_hora","refletir","entender","ajustar","observacao","alerta","alunos_ocorrencia","acao_tomada","avisado_a","id","atualizado_em"];
+const CSV_COLS=["tipo","autor","aluno_id","aluno_n","aluno_nome","dia","atividade_idx","atividade","data_hora","refletir","entender","ajustar","observacao","alerta","alunos_ocorrencia","acao_tomada","avisado_a","id","atualizado_em","dados_json"];
 const csvCell=v=>{v=v==null?"":String(v);return /[;"\n\r]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v};
 const iso=ms=>ms?new Date(ms).toISOString():"";
 function expCsv(){
- const rows=[];
+ const rows=sorted().map(p=>({tipo:"aluno",autor:db.config.autor,aluno_id:p.id,aluno_n:p.n,aluno_nome:p.nome,observacao:p.ausente?"AUSENTE":"",atualizado_em:iso(p.updatedAt),dados_json:JSON.stringify(p)}));
  Object.entries(db.registros).forEach(([k,r])=>{if(!hasContent(r))return;const [pid,i,autor]=k.split("|");const p=byId(pid)||{};const A=ATIV[+i]||{};
   rows.push({tipo:"individual",autor,aluno_id:pid,aluno_n:p.n,aluno_nome:p.nome,dia:A.d,atividade_idx:i,atividade:A.n,data_hora:r.dataHora,refletir:r.refletir,entender:r.entender,ajustar:r.ajustar,observacao:r.obs,alerta:r.alerta?"sim":"",atualizado_em:iso(r.updatedAt)})});
  Object.entries(db.debriefs).forEach(([k,r])=>{if(!hasContent(r))return;const [d,pid,autor]=k.split("|");const D=DIAS[+d.slice(1)-1]||{};const p=pid==="geral"?{}:(byId(pid)||{});
@@ -1031,14 +1037,17 @@ function importAlunosCsv(rows){let n=0;const yes=v=>/^(s|sim|x|1|true)/i.test(St
    doenca:r.doenca||"",medicacao:r.medicacao_controlada||"",alergiaMed:r.alergia_medicamento||"",alergias:r.outras_alergias||"",alergiaInseto:yes(r.alergia_inseto),
    restricao:r.restricao_alimentar||"",vinculo:r.vinculo||"",extras:String(r.atencao_staff||"").split(/\s*\|\s*/).filter(Boolean).join("\n"),
    pendente:yes(r.dados_pendentes),pendenteTxt:r.o_que_falta||"",notas:r.notas||"",updatedAt:Date.now()});
-  if(ex)Object.assign(ex,p);else db.participantes.push(p);n++});
+  if("ausente" in r){p.ausente=yes(r.ausente)}
+  if(ex){Object.keys(p).forEach(k=>{const v=p[k];if(k==="id")return;if(v===""||v===null||v===false&&!(k in r))return;ex[k]=v});ex.updatedAt=Date.now()}else db.participantes.push(p);n++});
  if(!n)throw new Error("Nenhum aluno encontrado no CSV");persist(true);return n}
 function importCsv(txt){
  const rows=parseCsv(txt);if(rows.length&&!("tipo" in rows[0])&&("nome" in rows[0]))return importAlunosCsv(rows);
  if(!rows.length||!("tipo" in rows[0]))throw new Error("CSV fora do formato do app");let n=0;
  const ts=s=>Date.parse(s)||0;const findP=(id,nome)=>byId(id)||db.participantes.find(p=>norm(p.nome)===norm(nome));
  const put=(coll,k,v)=>{const cur=coll[k];if(!cur||(v.updatedAt||0)>(cur.updatedAt||0)){coll[k]=v;n++}};
- rows.forEach(r=>{const base={dataHora:r.data_hora,refletir:r.refletir,entender:r.entender,ajustar:r.ajustar,obs:r.observacao,alerta:/^s/i.test(r.alerta),updatedAt:ts(r.atualizado_em)};
+ rows.filter(r=>r.tipo==="aluno"&&r.dados_json).forEach(r=>{try{const p=JSON.parse(r.dados_json);if(!p.id||!p.nome)return;const ex=byId(p.id);
+  if(!ex){db.participantes.push(P(p));n++}else if((p.updatedAt||0)>(ex.updatedAt||0)){Object.assign(ex,p);n++}}catch(e){}});
+ rows.forEach(r=>{if(r.tipo==="aluno")return;const base={dataHora:r.data_hora,refletir:r.refletir,entender:r.entender,ajustar:r.ajustar,obs:r.observacao,alerta:/^s/i.test(r.alerta),updatedAt:ts(r.atualizado_em)};
   if(r.tipo==="individual"){const p=findP(r.aluno_id,r.aluno_nome);if(!p)return;put(db.registros,`${p.id}|${r.atividade_idx}|${r.autor}`,base)}
   else if(r.tipo==="debrief"){let pid="geral";if(r.aluno_id||(r.aluno_nome&&!/^\(geral/.test(r.aluno_nome))){const p=findP(r.aluno_id,r.aluno_nome);if(!p)return;pid=p.id}put(db.debriefs,debKey(r.dia,pid,r.autor),base)}
   else if(r.tipo==="ocorrencia"){const o={id:r.id||"o"+Date.now()+Math.random(),dataHora:r.data_hora,alunos:String(r.aluno_id||"").split(",").filter(id=>byId(id)),oque:r.observacao,acao:r.acao_tomada,avisado:r.avisado_a,autor:r.autor,updatedAt:ts(r.atualizado_em)};
@@ -1209,6 +1218,9 @@ document.addEventListener("click",e=>{const b=e.target.closest("[data-act]");if(
   case"alunoSalvar":salvarAluno();break;
   case"alunoDel":ask("Remover este aluno deste celular?","Remover").then(ok=>{if(ok){db.participantes=db.participantes.filter(x=>x.id!==v);persist(true);closeDetail()}});break;
   case"fechar":closeModal();break;
+  case"ausente":{const p=byId(v);modal(`<h3>Marcar ${esc(p.curto)} como ausente</h3><p class="muted">Os registros dele(a) continuam salvos. Dá para voltar a qualquer momento.</p><div style="font-size:12.5px;color:var(--muted);margin:10px 0 4px">MOTIVO (OPCIONAL)</div><textarea id="aus-m" placeholder="Ex.: desistiu, atendimento médico, chegou depois…"></textarea><button class="btn danger full" data-act="ausSalvar" data-v="${v}">⛔ Marcar ausente</button><button class="btn sec full" data-act="fechar">Cancelar</button>`);break}
+  case"ausSalvar":{const p=byId(v);p.ausente=true;p.ausenteMotivo=$("#aus-m").value.trim();p.ausenteEm=nowLocal();p.updatedAt=Date.now();persist(true);closeModal();renderDetail();toast(p.curto+" marcado(a) ausente");break}
+  case"presente":{const p=byId(v);p.ausente=false;p.ausenteEm="";p.updatedAt=Date.now();persist(true);renderDetail();toast(p.curto+" de volta ✓");break}
   case"debAbrir":{const [d,pid]=v.split("|");debModal(+d,pid);break}
   case"debProx":{const [d,pid]=v.split("|");const l=sorted(),i=l.findIndex(p=>p.id===pid),nx=l.slice(i+1).find(p=>!debFilled(+d,p.id))||l[i+1];if(nx)debModal(+d,nx.id);else{closeModal();render();toast("Fim da lista ✓")}break}
   case"instOk":db.config.hideInstall=true;persist(true);render();break;
