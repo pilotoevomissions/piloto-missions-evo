@@ -1,4 +1,4 @@
-# Patrulha Echo · Guia de Campo (EVO Missions)
+# EVO Missions · Guia de Campo
 
 App web instalável (PWA) para os staffs de patrulha: registro do CAV por participante e atividade, guia rápido de perguntas (CNV), ocorrências e relatórios em PDF/Word.
 

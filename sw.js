@@ -1,6 +1,6 @@
-/* Patrulha Echo · service worker: guarda o app no aparelho para abrir sem internet.
+/* EVO Missions · service worker: guarda o app no aparelho para abrir sem internet.
    Os DADOS dos alunos não passam por aqui: ficam no localStorage do aparelho. */
-const VERSION = "echo-v0.3.0";
+const VERSION = "evo-campo-v0.3.1";
 const FILES = ["./", "./index.html", "./manifest.webmanifest", "./apple-touch-icon.png", "./icon-192.png", "./icon-512.png", "./icon-maskable-512.png"];
 self.addEventListener("install", e => {
   e.waitUntil(caches.open(VERSION).then(c => c.addAll(FILES)).then(() => self.skipWaiting()));

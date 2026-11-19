@@ -1,7 +1,7 @@
 {
-  "name": "Patrulha Echo · Guia de Campo",
-  "short_name": "Echo",
-  "description": "Guia de campo e registro do CAV da Patrulha Echo (EVO Missions). Funciona offline; dados ficam só no aparelho.",
+  "name": "EVO Missions · Guia de Campo",
+  "short_name": "EVO Campo",
+  "description": "Guia de campo e registro do CAV dos staffs de patrulha (EVO Missions). Funciona offline; dados ficam só no aparelho.",
   "lang": "pt-BR",
   "start_url": "./index.html",
   "scope": "./",
