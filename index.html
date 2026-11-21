@@ -54,7 +54,12 @@ small,.muted{color:var(--muted);font-size:13px}
 .pc.aus{opacity:.55;border-style:dashed}
 .pc.aus .nm{text-decoration:line-through}
 .pc.alerta{border-color:var(--alert);box-shadow:inset 4px 0 0 var(--alert)}
-.av{width:42px;height:42px;border-radius:50%;display:grid;place-items:center;font-weight:800;color:#fff;flex:none;font-size:15px}
+.av{width:42px;height:42px;border-radius:50%;display:grid;place-items:center;font-weight:800;color:#fff;flex:none;font-size:15px;position:relative;background-size:cover;background-position:center}
+.av .avn{position:absolute;right:-5px;bottom:-4px;background:var(--card);color:var(--ink);border:1px solid var(--line);border-radius:9px;font-size:10.5px;font-weight:800;padding:0 4px;line-height:15px}
+.fotobox{display:flex;gap:14px;align-items:center;margin:6px 0 4px}
+.fotobox .av{width:84px;height:84px;font-size:26px}
+.fotobox .bts{display:flex;flex-direction:column;gap:6px;flex:1}
+.fotobox label.btn{display:block;text-align:center}
 .bg-D{background:var(--D)}.bg-I{background:var(--I)}.bg-E{background:var(--E)}.bg-A{background:var(--A)}
 .pc .nm{font-weight:650;line-height:1.2}
 .pc .mt{font-size:13px;color:var(--muted);margin-top:2px}
@@ -646,8 +651,18 @@ const P=o=>Object.assign({doenca:"",medicacao:"",alergiaMed:"",alergias:"",alerg
 /* Sem dados pessoais no app: a lista de alunos vem do arquivo importado (EVO_Echo_alunos.json). */
 /* ================== BANCO LOCAL ================== */
 const KEY="evo_echo_nov26_v1";
-const APPV="0.3.4";
+const APPV="0.3.5";
 let storageOk=true;
+/* fotos: guardadas só neste aparelho, fora do CSV (chave separada) */
+const FKEY=KEY+"_fotos";let FOTOS={};try{FOTOS=JSON.parse(localStorage.getItem(FKEY)||"{}")||{}}catch(e){FOTOS={}}
+function saveFotos(){try{localStorage.setItem(FKEY,JSON.stringify(FOTOS));return true}catch(e){toast("Sem espaço para a foto neste celular");return false}}
+const fotoOf=id=>FOTOS[id]||"";
+const avStyle=p=>fotoOf(p.id)?`background-image:url(${fotoOf(p.id)});`:"";
+const avInner=p=>fotoOf(p.id)?`<span class="avn">${p.n}</span>`:p.n;
+function fotoComprimir(file){return new Promise((res,rej)=>{const u=URL.createObjectURL(file),im=new Image();
+ im.onload=()=>{const w=im.naturalWidth,h=im.naturalHeight,s=Math.min(w,h),c=document.createElement("canvas");c.width=c.height=Math.min(360,s);
+  c.getContext("2d").drawImage(im,(w-s)/2,h>w?(h-s)*0.3:(h-s)/2,s,s,0,0,c.width,c.height);URL.revokeObjectURL(u);res(c.toDataURL("image/jpeg",0.72))};
+ im.onerror=()=>{URL.revokeObjectURL(u);rej(new Error("Não foi possível ler a imagem"))};im.src=u})}
 function fresh(){return{version:2,patrulha:"Echo",participantes:[],info:null,registros:{},debriefs:{},ocorrencias:[],savedAt:0,config:{autor:"",autores:[],ativ:0,tema:"light",lastExport:0}}}
 function load(){try{localStorage.setItem(KEY+"_t","1");localStorage.removeItem(KEY+"_t");const s=localStorage.getItem(KEY);if(s)return JSON.parse(s)}catch(e){storageOk=false}return null}
 /* migra debriefs coletivos antigos (d1|Autor) para o campo "geral" do dia */
@@ -763,7 +778,7 @@ function renderLista(){
  const list=sorted().sort((x,y)=>(x.ausente?1:0)-(y.ausente?1:0)).filter(p=>(!q||norm(p.nome).includes(q))&&(f==="aus"?p.ausente:f==="todos"||(f==="atencao"?atencoes(p).some(x=>x.t!=="info"):f==="alerta"?hasAlerta(p.id):f==="sem"?!p.ausente&&!filled(p.id,a):prim(p)===f)));
  el.innerHTML=list.map(p=>{const ok=filled(p.id,a),al=hasAlerta(p.id);
   return `<button class="pc ${al?"alerta":""} ${p.ausente?"aus":""}" data-act="abrir" data-v="${p.id}">
-   <div class="av bg-${prim(p)}">${p.n}</div>
+   <div class="av bg-${prim(p)}" style="${avStyle(p)}">${avInner(p)}</div>
    <div style="min-width:0"><div class="nm">${esc(p.nome)}</div>
     <div class="mt">${p.idade??"idade ?"} · ${p.sexo} · ${discHTML(p.disc)} ${al?'<span class="tag a">🚨 alerta</span>':""}</div>
     <div class="ic">${tags(p)}</div></div>
@@ -792,6 +807,7 @@ function renderDetail(){
     ${formReg("reg",k,r,i)}
    </div></details>`}).join("");
  const html=`<div class="lh"><button class="back" data-act="voltar" aria-label="Voltar">‹</button>
+   ${fotoOf(p.id)?`<div class="av" style="width:46px;height:46px;${avStyle(p)}" data-act="verFoto" data-v="${p.id}"></div>`:""}
    <div><div class="t" style="${p.ausente?"text-decoration:line-through":""}">${p.n}. ${esc(p.nome)}</div><div class="s">${p.ausente?"⛔ AUSENTE · ":""}${p.idade??"idade ?"} anos · ${p.sexo==="F"?"Feminino":"Masculino"} · ${String(p.disc).split("/").map(l=>DISCN[l]||l).join(" / ")}</div></div>
    <button class="ed" data-act="editAluno" data-v="${p.id}">Editar</button></div>
   <div class="in"><main>
@@ -829,7 +845,7 @@ function vPatrulha(){
  const sem=state.debSem;
  const cav=DIAS.map(D=>{const n=debCount(D.d),tot=ps.filter(p=>!p.ausente).length,geral=debOf(D.d,"geral").length;
   const rows=sorted().sort((x,y)=>(x.ausente?1:0)-(y.ausente?1:0)).filter(p=>!sem||!p.ausente&&!debFilled(D.d,p.id)).map(p=>{const ok=debFilled(D.d,p.id),al=debOf(D.d,p.id).some(x=>x.alerta);
-   return `<button class="pc ${al?"alerta":""} ${p.ausente?"aus":""}" style="padding:8px 10px" data-act="debAbrir" data-v="${D.d}|${p.id}"><div class="av bg-${prim(p)}" style="width:34px;height:34px;font-size:13px">${p.n}</div><div style="min-width:0"><div class="nm">${esc(p.nome)}</div><div class="mt">${discHTML(p.disc)}${p.ausente?' <span class="tag a">⛔ ausente</span>':""}${al?' <span class="tag a">🚨 alerta</span>':""}</div></div><div class="st ${ok?"ok":""}"><b>${ok?"✓":"○"}</b></div></button>`}).join("")||`<p class="empty">Todos preenchidos ✓</p>`;
+   return `<button class="pc ${al?"alerta":""} ${p.ausente?"aus":""}" style="padding:8px 10px" data-act="debAbrir" data-v="${D.d}|${p.id}"><div class="av bg-${prim(p)}" style="width:34px;height:34px;font-size:13px;${avStyle(p)}">${avInner(p)}</div><div style="min-width:0"><div class="nm">${esc(p.nome)}</div><div class="mt">${discHTML(p.disc)}${p.ausente?' <span class="tag a">⛔ ausente</span>':""}${al?' <span class="tag a">🚨 alerta</span>':""}</div></div><div class="st ${ok?"ok":""}"><b>${ok?"✓":"○"}</b></div></button>`}).join("")||`<p class="empty">Todos preenchidos ✓</p>`;
   return `<details class="ac" data-dia="${D.d}" ${state.debOpen===D.d?"open":""}><summary><span class="d">${D.d}º dia</span><span class="n">${esc(D.n)}<small class="muted">${n}/${tot} preenchidos</small></span><span class="ok">${tot&&n===tot?"✓":""}</span></summary><div class="body">
    <div class="prog"><div style="width:${tot?n/tot*100:0}%"></div></div>
    <div class="q"><span class="L">R</span><span>${esc(D.R)}</span></div><div class="q"><span class="L">E</span><span>${esc(D.E)}</span></div><div class="q"><span class="L">A</span><span>${esc(D.A)}</span></div>
@@ -938,7 +954,13 @@ function alunoModal(id){
  const p=byId(id)||P({id:"p"+Date.now(),n:Math.max(0,...db.participantes.map(x=>x.n))+1,nome:"",curto:"",idade:null,sexo:"F",disc:"E"});
  const T=(k,l,ph="")=>`<div class="fl">${l}</div><input data-f="${k}" value="${esc(p[k]??"")}" placeholder="${ph}">`;
  const A=(k,l)=>`<div class="fl">${l}</div><textarea data-f="${k}">${esc(p[k]||"")}</textarea>`;
+ state.fotoPend=undefined;
  modal(`<h3>${id?"Editar dados":"Novo aluno"}</h3><div class="form" id="fa" data-id="${p.id}" style="border:0;padding:0">
+  <div class="fotobox"><div class="av bg-${prim(p)}" id="fotoPrev" style="${avStyle(p)}">${fotoOf(p.id)?"":(p.n||"")}</div>
+   <div class="bts"><label class="btn sm">📷 Tirar foto<input type="file" accept="image/*" capture="environment" class="fotoIn" hidden></label>
+   <label class="btn sec sm">🖼️ Escolher da galeria<input type="file" accept="image/*" class="fotoIn" hidden></label>
+   <button class="btn sec sm" data-act="fotoRem" id="fotoRemBt" style="${fotoOf(p.id)?"":"display:none"}">Remover foto</button></div></div>
+  <div class="muted" style="font-size:12.5px">A foto fica só neste celular e é salva ao tocar em Salvar.</div>
   ${T("nome","Nome completo")}
   <div class="grid2"><div>${T("curto","Como chamar")}</div><div>${T("n","Nº")}</div></div>
   <div class="grid2"><div>${T("idade","Idade","ex.: 42")}</div><div><div class="fl">Sexo</div><select data-f="sexo"><option ${p.sexo==="F"?"selected":""}>F</option><option ${p.sexo==="M"?"selected":""}>M</option></select></div></div>
@@ -959,7 +981,9 @@ function salvarAluno(){
  const f=$("#fa"),id=f.dataset.id;let p=byId(id);const novo=!p;if(novo)p=P({id});
  f.querySelectorAll("[data-f]").forEach(el=>{const k=el.dataset.f;let v=el.type==="checkbox"?el.checked:el.value.trim();if(k==="idade")v=v?parseInt(v,10)||null:null;if(k==="n")v=parseInt(v,10)||p.n;if(k==="disc")v=v.toUpperCase().replace(/\s/g,"");p[k]=v});
  if(!p.nome)return toast("Informe o nome");if(!p.curto)p.curto=p.nome.split(" ")[0];
- if(p.ausente&&!p.ausenteEm)p.ausenteEm=nowLocal();if(!p.ausente)p.ausenteEm="";p.updatedAt=Date.now();if(novo)db.participantes.push(p);persist(true);closeModal();toast("Dados salvos ✓");
+ if(p.ausente&&!p.ausenteEm)p.ausenteEm=nowLocal();if(!p.ausente)p.ausenteEm="";p.updatedAt=Date.now();if(novo)db.participantes.push(p);persist(true);
+ if(state.fotoPend!==undefined){const old=FOTOS[p.id];if(state.fotoPend)FOTOS[p.id]=state.fotoPend;else delete FOTOS[p.id];if(!saveFotos()){if(old)FOTOS[p.id]=old;else delete FOTOS[p.id]}state.fotoPend=undefined}
+ closeModal();toast("Dados salvos ✓");
  if(state.detail)renderDetail();else render()}
 
 /* ---------- DADOS ---------- */
@@ -998,12 +1022,13 @@ const stamp=()=>new Date().toISOString().slice(0,10);
 const fnSafe=s=>norm(s||"staff").replace(/[^a-z0-9]+/g,"_").replace(/^_|_$/g,"")||"staff";
 const stampHM=()=>{const d=new Date();d.setMinutes(d.getMinutes()-d.getTimezoneOffset());return d.toISOString().slice(0,16).replace("T","_").replace(":","h")};
 function marcaBackup(ok){if(ok===false)return;db.config.lastExport=Date.now();persist(true);if(state.tab!=="cav"&&!state.detail)render()}
-function expJson(){const b=new Blob([JSON.stringify(Object.assign({},db,{exportadoPor:db.config.autor,exportadoEm:new Date().toISOString(),appVersion:APPV}),null,1)],{type:"application/json"});shareOrDownload(b,`EVO_backup_${fnSafe(db.config.autor)}_${stampHM()}.json`).then(marcaBackup)}
+function expJson(){const b=new Blob([JSON.stringify(Object.assign({},db,{fotos:FOTOS,exportadoPor:db.config.autor,exportadoEm:new Date().toISOString(),appVersion:APPV}),null,1)],{type:"application/json"});shareOrDownload(b,`EVO_backup_${fnSafe(db.config.autor)}_${stampHM()}.json`).then(marcaBackup)}
 function merge(inc){
  if(!inc||!Array.isArray(inc.participantes))throw new Error("Arquivo inválido");let n=0;
  const nd={};Object.entries(inc.debriefs||{}).forEach(([k,v])=>{const p=k.split("|");nd[p.length===2?`${p[0]}|geral|${p[1]}`:k]=v});inc.debriefs=nd;
  if(!db.participantes.length&&inc.config&&inc.config.autor&&!(db.config.autores||[]).includes(inc.config.autor)){/* restauração: lembra o nome usado no backup */db.config.autores=(db.config.autores||[]).concat(inc.config.autor)}
  if(inc.info&&(!db.info||(inc.info.updatedAt||0)>=(db.info.updatedAt||0))){db.info=inc.info;n++}
+ if(inc.fotos&&typeof inc.fotos==="object"){let nf=0;Object.entries(inc.fotos).forEach(([k,v])=>{if(!FOTOS[k]&&/^data:image\//.test(v)){FOTOS[k]=v;nf++}});if(nf){saveFotos();n+=nf}}
  inc.participantes.forEach(p=>{const i=db.participantes.findIndex(x=>x.id===p.id);if(i<0){db.participantes.push(p);n++}else if((p.updatedAt||0)>(db.participantes[i].updatedAt||0)){db.participantes[i]=p;n++}});
  ["registros","debriefs"].forEach(c=>Object.entries(inc[c]||{}).forEach(([k,v])=>{const cur=db[c][k];if(!cur||(v.updatedAt||0)>(cur.updatedAt||0)){db[c][k]=v;n++}}));
  (inc.ocorrencias||[]).forEach(o=>{const i=db.ocorrencias.findIndex(x=>x.id===o.id);if(i<0){db.ocorrencias.push(o);n++}else if((o.updatedAt||0)>(db.ocorrencias[i].updatedAt||0)){db.ocorrencias[i]=o;n++}});
@@ -1058,7 +1083,7 @@ function importCsv(txt){
 const CRC=(()=>{const t=new Uint32Array(256);for(let n=0;n<256;n++){let c=n;for(let k=0;k<8;k++)c=c&1?0xEDB88320^(c>>>1):c>>>1;t[n]=c>>>0}return t})();
 const crc32=u=>{let c=0xFFFFFFFF;for(let i=0;i<u.length;i++)c=CRC[(c^u[i])&255]^(c>>>8);return(c^0xFFFFFFFF)>>>0};
 function zip(files){const enc=new TextEncoder(),parts=[],cd=[];let off=0;
- files.forEach(([name,str])=>{const nm=enc.encode(name),d=enc.encode(str),crc=crc32(d);
+ files.forEach(([name,str])=>{const nm=enc.encode(name),d=typeof str==="string"?enc.encode(str):str,crc=crc32(d);
   const lh=new DataView(new ArrayBuffer(30));[[0,0x04034b50,4],[4,20,2],[6,0x0800,2],[8,0,2],[10,0,2],[12,0x21,2],[14,crc,4],[18,d.length,4],[22,d.length,4],[26,nm.length,2],[28,0,2]].forEach(([o,v,s])=>s===4?lh.setUint32(o,v,true):lh.setUint16(o,v,true));
   parts.push(new Uint8Array(lh.buffer),nm,d);
   const ch=new DataView(new ArrayBuffer(46));[[0,0x02014b50,4],[4,20,2],[6,20,2],[8,0x0800,2],[10,0,2],[12,0,2],[14,0x21,2],[16,crc,4],[20,d.length,4],[24,d.length,4],[28,nm.length,2],[30,0,2],[32,0,2],[34,0,2],[36,0,2],[38,0,4],[42,off,4]].forEach(([o,v,s])=>s===4?ch.setUint32(o,v,true):ch.setUint16(o,v,true));
@@ -1087,15 +1112,18 @@ function relData(res){
  const alunos=sorted().map(p=>res?[p.n,nm(p,p.nome),p.sexo,p.disc]:[p.n,nm(p,p.nome),p.idade??"Pend.",p.sexo,p.disc,atn(p)||"—"]);
  const clean=es=>res?es.map(e=>Object.assign({},e,{alerta:false})):es;
  const dias=DIAS.map(D=>({titulo:`${D.d}º dia · ${D.n}`,perguntas:D,rows:[...sorted().map(p=>({label:nm(p,`${p.n}. ${p.curto||p.nome}`),es:clean(debOf(D.d,p.id))})),{label:"Geral da patrulha",es:clean(debOf(D.d,"geral"))}]}));
- const indiv=sorted().map(p=>({titulo:p.ausente?`~~${p.n}. ${p.nome} · ${p.disc}~~  ${AUS(p)}`:`${p.n}. ${p.nome} · ${p.disc}`,atencao:res?"":atencoes(p).filter(x=>x.t!=="info"&&!/^AUSENTE/.test(x.x)).map(x=>x.x).join(" "),notas:res?"":p.notas||"",
+ const indiv=sorted().map(p=>({foto:FOTOS[p.id]||"",titulo:p.ausente?`~~${p.n}. ${p.nome} · ${p.disc}~~  ${AUS(p)}`:`${p.n}. ${p.nome} · ${p.disc}`,atencao:res?"":atencoes(p).filter(x=>x.t!=="info"&&!/^AUSENTE/.test(x.x)).map(x=>x.x).join(" "),notas:res?"":p.notas||"",
   ativ:ATIV.map((A,i)=>({label:`${A.d}º dia · ${A.n}${A.s?" ("+A.s+")":""}`,es:clean(recsOf(p.id,i))})),
   cav:DIAS.map(D=>({label:`CAV do ${D.d}º dia`,es:clean(debOf(D.d,p.id))}))}));
  const oc=res?null:db.ocorrencias.slice().sort((a,c)=>(a.dataHora||"").localeCompare(c.dataHora||"")).map(o=>[fmtDT(o.dataHora),(o.alunos||[]).map(id=>(byId(id)||{}).nome||"?").join(", ")||"Patrulha",o.oque,o.acao,o.avisado]);
- return{tit,sub,aviso,res,alunosHead:res?["Nº","Nome","Sexo","Perfil"]:["Nº","Nome","Idade","Sexo","Perfil","Pontos de atenção"],alunos,dias,indiv,oc,nOc:db.ocorrencias.length}}
+ const fotos=sorted().map(p=>FOTOS[p.id]||"");
+ return{hasF:fotos.some(Boolean),fotos,tit,sub,aviso,res,alunosHead:res?["Nº","Nome","Sexo","Perfil"]:["Nº","Nome","Idade","Sexo","Perfil","Pontos de atenção"],alunos,dias,indiv,oc,nOc:db.ocorrencias.length}}
 const relName=(res,ext)=>`EVO_Registro_${res?"resumido":"completo"}_${stampHM()}.${ext}`;
 const wrc=(c,o={})=>{const s=String(c??"");const m=/^~~([\s\S]*?)~~([\s\S]*)$/.exec(s);if(!m)return wr(s,o);return wr(m[1],Object.assign({},o,{s:1,c:"7A7A7A"}))+(m[2]?wr(m[2],Object.assign({},o,{b:1,c:"B03A2E"})):"")};
 function expDoc(res){
- const R=relData(res);
+ const R=relData(res),media=[];
+ const img=(du,emu)=>{const k=media.length+1,id="rIdF"+k;let bin;try{bin=Uint8Array.from(atob(du.split(",")[1]),c=>c.charCodeAt(0))}catch(e){return""}media.push({id,name:"f"+k+".jpeg",data:bin});
+  return `<w:r><w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0"><wp:extent cx="${emu}" cy="${emu}"/><wp:docPr id="${k}" name="Foto ${k}"/><a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:pic><pic:nvPicPr><pic:cNvPr id="${k}" name="f${k}.jpeg"/><pic:cNvPicPr/></pic:nvPicPr><pic:blipFill><a:blip r:embed="${id}"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill><pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${emu}" cy="${emu}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr></pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r>`};
  const W=[2300,1250,2900,2900,2900,2888];
  const cell=(es,f)=>es.filter(e=>f==="obs"?(e.obs||e.alerta):e[f]).map(e=>(es.length>1?wr(e.autor+": ",{b:1}):"")+(f==="obs"&&e.alerta?wr("ALERTA: ",{b:1,c:"B03A2E"}):"")+wr(f==="dataHora"?fmtDT(e[f]):(e[f]||"")));
  const row=(lab,es)=>[[wrc(lab,{b:1})],...["dataHora","refletir","entender","ajustar","obs"].map(f=>cell(es,f))];
@@ -1103,24 +1131,25 @@ function expDoc(res){
  let b=`<w:p>${wr(R.tit,{b:1,c:"3B4A2A",sz:32})}</w:p>`;
  b+=wp(wr(R.sub));
  b+=wp(wr(R.aviso,{i:1,c:"B03A2E"}));
- b+=H("Alunos")+wtable(res?[900,9000,1200,1800]:[700,4300,900,800,1000,7438],R.alunosHead,R.alunos.map(r=>r.map(c=>[wrc(c)])));
+ {const bw=res?[900,9000,1200,1800]:[700,4300,900,800,1000,7438];if(R.hasF)bw[res?1:5]-=900;
+  b+=H("Alunos")+wtable(R.hasF?[900,...bw]:bw,R.hasF?["Foto",...R.alunosHead]:R.alunosHead,R.alunos.map((r,i)=>{const cs=r.map(c=>[wrc(c)]);return R.hasF?[[R.fotos[i]?img(R.fotos[i],457200):""],...cs]:cs}))}
  R.dias.forEach(d=>{b+=H("CAV do dia · "+d.titulo);
   b+=wp(wr("R: ",{b:1})+wr(d.perguntas.R)+wr("   E: ",{b:1})+wr(d.perguntas.E)+wr("   A: ",{b:1})+wr(d.perguntas.A),0);
   b+=wtable(W,["Participante",...HD.slice(1)],d.rows.map(r=>row(r.label,r.es)))});
- R.indiv.forEach(p=>{b+=p.titulo.startsWith("~~")?`<w:p><w:pPr><w:keepNext/><w:spacing w:before="280" w:after="100"/></w:pPr>${wrc(p.titulo,{b:1,sz:26})}</w:p>`:H(p.titulo);
+ R.indiv.forEach(p=>{if(p.foto)b+=`<w:p><w:pPr><w:keepNext/><w:spacing w:before="280" w:after="0"/></w:pPr>${img(p.foto,731520)}</w:p>`;b+=p.titulo.startsWith("~~")?`<w:p><w:pPr><w:keepNext/><w:spacing w:before="280" w:after="100"/></w:pPr>${wrc(p.titulo,{b:1,sz:26})}</w:p>`:H(p.titulo);
   if(p.atencao)b+=wp(wr("Atenção: ",{b:1,c:"B03A2E"})+wr(p.atencao,{c:"B03A2E"}));
   if(p.notas)b+=wp(wr("Notas: ",{b:1})+wr(p.notas));
   b+=wtable(W,HD,p.ativ.concat(p.cav).map(r=>row(r.label,r.es)))});
  if(R.oc)b+=H("Ocorrências da patrulha")+wtable([1500,3200,4200,3438,2800],["Data/hora","Aluno(s)","O que aconteceu","Ação tomada","Avisado a"],
   R.oc.length?R.oc.map(r=>r.map(c=>[wr(c)])):[[[wr("Nenhuma ocorrência.")],[],[],[],[]]]);
  const W_NS='xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"',X='<?xml version="1.0" encoding="UTF-8" standalone="yes"?>';
- const doc=`${X}<w:document ${W_NS}><w:body>${b}<w:sectPr><w:pgSz w:w="16838" w:h="11906" w:orient="landscape"/><w:pgMar w:top="850" w:right="850" w:bottom="850" w:left="850" w:header="400" w:footer="400" w:gutter="0"/></w:sectPr></w:body></w:document>`;
+ const doc=`${X}<w:document ${W_NS} xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture"><w:body>${b}<w:sectPr><w:pgSz w:w="16838" w:h="11906" w:orient="landscape"/><w:pgMar w:top="850" w:right="850" w:bottom="850" w:left="850" w:header="400" w:footer="400" w:gutter="0"/></w:sectPr></w:body></w:document>`;
  const blob=zip([
-  ["[Content_Types].xml",`${X}<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/><Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/></Types>`],
+  ["[Content_Types].xml",`${X}<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Default Extension="jpeg" ContentType="image/jpeg"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/><Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/></Types>`],
   ["_rels/.rels",`${X}<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>`],
-  ["word/_rels/document.xml.rels",`${X}<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`],
+  ["word/_rels/document.xml.rels",`${X}<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>${media.map(m=>`<Relationship Id="${m.id}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/${m.name}"/>`).join("")}</Relationships>`],
   ["word/styles.xml",`${X}<w:styles ${W_NS}><w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:ascii="Calibri" w:hAnsi="Calibri" w:eastAsia="Calibri" w:cs="Calibri"/><w:sz w:val="18"/><w:szCs w:val="18"/><w:lang w:val="pt-BR"/></w:rPr></w:rPrDefault><w:pPrDefault><w:pPr><w:spacing w:after="40"/></w:pPr></w:pPrDefault></w:docDefaults></w:styles>`],
-  ["word/document.xml",doc]]);
+  ["word/document.xml",doc],...media.map(m=>["word/media/"+m.name,m.data])]);
  shareOrDownload(blob,relName(res,"docx")).then(marcaBackup)}
 
 /* ---------- RELATÓRIO .PDF (jsPDF embutido, funciona offline) ---------- */
@@ -1139,20 +1168,21 @@ function expPdf(res){
  const para=(t,o={})=>{doc.setFont("helvetica",o.b?"bold":o.i?"italic":"normal");const sz=o.sz||9;doc.setFontSize(sz);doc.setTextColor(...(o.c||[20,20,20]));const L=doc.splitTextToSize(T(t),PW-2*M);space(L.length*(sz+3));doc.text(L,M,y+sz);y+=L.length*(sz+3)+4;doc.setTextColor(20,20,20)};
  const cellTxt=(es,f)=>es.filter(e=>f==="obs"?(e.obs||e.alerta):e[f]).map(e=>(es.length>1?e.autor+": ":"")+(f==="obs"&&e.alerta?"ALERTA: ":"")+(f==="dataHora"?fmtDT(e[f]):(e[f]||""))).join("\n");
  const rowOf=r=>[r.label,...["dataHora","refletir","entender","ajustar","obs"].map(f=>cellTxt(r.es,f))];
- const tbl=(hd,body,cs)=>{doc.autoTable({head:[hd.map(T)],body:body.map(r=>r.map(c=>{const m=/^~~([\s\S]*?)~~([\s\S]*)$/.exec(String(c??""));return m?{content:T(m[1]+m[2]),_s:1,styles:{textColor:[110,110,110]}}:T(c)})),startY:y,margin:{left:M,right:M,top:M,bottom:36},
+ const tbl=(hd,body,cs,imgs)=>{doc.autoTable({head:[hd.map(T)],body:body.map(r=>r.map(c=>{const m=/^~~([\s\S]*?)~~([\s\S]*)$/.exec(String(c??""));return m?{content:T(m[1]+m[2]),_s:1,styles:{textColor:[110,110,110]}}:T(c)})),startY:y,margin:{left:M,right:M,top:M,bottom:36},
   styles:{font:"helvetica",fontSize:8,cellPadding:3,overflow:"linebreak",valign:"top",lineColor:[190,190,180],lineWidth:.5,textColor:[20,20,20]},
   headStyles:{fillColor:OL,textColor:255,fontStyle:"bold"},alternateRowStyles:{fillColor:[248,246,239]},columnStyles:cs||{},
-  didDrawCell:d=>{const r=d.cell.raw;if(d.section!=="body"||!r||!r._s)return;const fs=d.cell.styles.fontSize,lh=fs*(doc.getLineHeightFactor?doc.getLineHeightFactor():1.15),x0=d.cell.x+d.cell.padding("left");
+  didDrawCell:d=>{if(imgs&&d.section==="body"&&d.column.index===0&&imgs[d.row.index]){try{const s=Math.min(d.cell.width,d.cell.height)-4;doc.addImage(imgs[d.row.index],"JPEG",d.cell.x+2,d.cell.y+2,s,s)}catch(e){}}const r=d.cell.raw;if(d.section!=="body"||!r||!r._s)return;const fs=d.cell.styles.fontSize,lh=fs*(doc.getLineHeightFactor?doc.getLineHeightFactor():1.15),x0=d.cell.x+d.cell.padding("left");
   doc.setFont("helvetica",d.cell.styles.fontStyle||"normal");doc.setFontSize(fs);doc.setDrawColor(90,90,90);doc.setLineWidth(.6);
   (d.cell.text||[]).some((ln,i)=>{if(/^AUSENTE/.test(ln))return true;const yy=d.cell.y+d.cell.padding("top")+fs*0.62+i*lh;doc.line(x0,yy,x0+Math.min(doc.getTextWidth(ln),d.cell.width-6),yy);return false})},
-  didParseCell:d=>{if(d.section==="body"&&/ALERTA:/.test(String(d.cell.raw)))d.cell.styles.textColor=RED;if(d.section==="body"&&d.column.index===0)d.cell.styles.fontStyle="bold"}});
+  didParseCell:d=>{if(imgs&&d.section==="body"&&d.column.index===0&&imgs[d.row.index])d.cell.styles.minCellHeight=38;if(d.section==="body"&&/ALERTA:/.test(String(d.cell.raw)))d.cell.styles.textColor=RED;if(d.section==="body"&&d.column.index===0)d.cell.styles.fontStyle="bold"}});
   y=doc.lastAutoTable.finalY+14};
  const C6={0:{cellWidth:118},1:{cellWidth:58},2:{cellWidth:152},3:{cellWidth:152},4:{cellWidth:152},5:{cellWidth:154}};
  const HD=["Atividade","Data/hora","Refletir","Entender","Ajustar","Observação"];
  para(R.tit,{b:1,sz:15,c:OL});para(R.sub);para(R.aviso,{i:1,c:RED});
- head("Alunos");tbl(R.alunosHead,R.alunos,res?{0:{cellWidth:40}}:{0:{cellWidth:30},1:{cellWidth:200},2:{cellWidth:40},3:{cellWidth:36},4:{cellWidth:44}});
+ head("Alunos");{const cs0=res?{0:{cellWidth:40}}:{0:{cellWidth:30},1:{cellWidth:200},2:{cellWidth:40},3:{cellWidth:36},4:{cellWidth:44}};
+  if(R.hasF){const cs={0:{cellWidth:40}};Object.entries(cs0).forEach(([k,v])=>cs[+k+1]=v);tbl(["Foto",...R.alunosHead],R.alunos.map(r=>["",...r]),cs,R.fotos)}else tbl(R.alunosHead,R.alunos,cs0)}
  R.dias.forEach(d=>{head("CAV do dia · "+d.titulo);para(`R: ${d.perguntas.R}   E: ${d.perguntas.E}   A: ${d.perguntas.A}`,{i:1,sz:8});tbl(["Participante",...HD.slice(1)],d.rows.map(rowOf),C6)});
- R.indiv.forEach(p=>{head(p.titulo);if(p.atencao)para("Atenção: "+p.atencao,{c:RED,sz:8.5});if(p.notas)para("Notas: "+p.notas,{sz:8.5});tbl(HD,p.ativ.concat(p.cav).map(rowOf),C6)});
+ R.indiv.forEach(p=>{if(p.foto){space(150);try{doc.addImage(p.foto,"JPEG",M,y+4,58,58)}catch(e){}y+=64}head(p.titulo);if(p.atencao)para("Atenção: "+p.atencao,{c:RED,sz:8.5});if(p.notas)para("Notas: "+p.notas,{sz:8.5});tbl(HD,p.ativ.concat(p.cav).map(rowOf),C6)});
  if(R.oc){head("Ocorrências da patrulha");tbl(["Data/hora","Aluno(s)","O que aconteceu","Ação tomada","Avisado a"],R.oc.length?R.oc:[["Nenhuma ocorrência.","","","",""]],{0:{cellWidth:70},1:{cellWidth:140}})}
  else para(`Ocorrências: ${R.nOc} registrada(s). Detalhes apenas no relatório completo.`,{i:1});
  const n=doc.getNumberOfPages();for(let i=1;i<=n;i++){doc.setPage(i);doc.setFont("helvetica","normal");doc.setFontSize(7.5);doc.setTextColor(120,120,110);
@@ -1187,6 +1217,9 @@ function askAutor(force){if($("#modal")&&!force)return;const L=db.config.autores
 function setAutor(nm){db.config.autor=nm;db.config.autores=[nm].concat((db.config.autores||[]).filter(x=>x!==nm)).slice(0,8);persist(true);closeModal();render();if(state.detail)renderDetail();toast("Olá, "+nm)}
 
 /* ================== EVENTOS ================== */
+document.addEventListener("change",async e=>{const t=e.target;if(!t.classList||!t.classList.contains("fotoIn")||!t.files[0])return;
+ try{toast("Processando foto…");const du=await fotoComprimir(t.files[0]);state.fotoPend=du;const pv=$("#fotoPrev");if(pv){pv.style.backgroundImage=`url(${du})`;pv.textContent=""}const rb=$("#fotoRemBt");if(rb)rb.style.display="";toast("Foto pronta: toque em Salvar")}
+ catch(err){toast(err.message||"Erro na foto")}t.value=""});
 function autosize(t){t.style.height="auto";t.style.height=Math.max(64,t.scrollHeight+2)+"px"}
 function setBind(path,val,el){
  const [kind,k,f]=path.split("::");const coll=kind==="reg"?db.registros:db.debriefs;
@@ -1227,6 +1260,8 @@ document.addEventListener("click",e=>{const b=e.target.closest("[data-act]");if(
   case"alunoSalvar":salvarAluno();break;
   case"alunoDel":ask("Remover este aluno deste celular?","Remover").then(ok=>{if(ok){db.participantes=db.participantes.filter(x=>x.id!==v);persist(true);closeDetail()}});break;
   case"fechar":closeModal();break;
+  case"fotoRem":{state.fotoPend=null;const pv=$("#fotoPrev");if(pv){pv.style.backgroundImage="";pv.textContent=""}b.style.display="none";break}
+  case"verFoto":modal(`<img src="${fotoOf(v)}" style="width:100%;border-radius:14px;display:block"><button class="btn sec full" data-act="fechar">Fechar</button>`);break;
   case"ausente":{const p=byId(v);modal(`<h3>Marcar ${esc(p.curto)} como ausente</h3><p class="muted">Os registros dele(a) continuam salvos. Dá para voltar a qualquer momento.</p><div style="font-size:12.5px;color:var(--muted);margin:10px 0 4px">MOTIVO (OPCIONAL)</div><textarea id="aus-m" placeholder="Ex.: desistiu, atendimento médico, chegou depois…"></textarea><button class="btn danger full" data-act="ausSalvar" data-v="${v}">⛔ Marcar ausente</button><button class="btn sec full" data-act="fechar">Cancelar</button>`);break}
   case"ausSalvar":{const p=byId(v);p.ausente=true;p.ausenteMotivo=$("#aus-m").value.trim();p.ausenteEm=nowLocal();p.updatedAt=Date.now();persist(true);closeModal();renderDetail();toast(p.curto+" marcado(a) ausente");break}
   case"presente":{const p=byId(v);p.ausente=false;p.ausenteEm="";p.updatedAt=Date.now();persist(true);closeModal();renderDetail();toast(p.curto+" de volta ✓");break}
@@ -1245,7 +1280,7 @@ document.addEventListener("click",e=>{const b=e.target.closest("[data-act]");if(
   case"expDoc":escolheRel("doc");break;
   case"expPdf":escolheRel("pdf");break;
   case"rel":{const [fmt,modo]=v.split("|");closeModal();(fmt==="doc"?expDoc:expPdf)(modo==="resumido");break}
-  case"reset":ask("Apagar TODOS os dados deste celular? Exporte o CSV antes. Não dá para desfazer.","Apagar tudo").then(ok=>{if(ok){const au=db.config.autor;db=fresh();db.config.autor=au;persist(true);render();toast("Dados apagados")}});break;
+  case"reset":ask("Apagar TODOS os dados deste celular? Exporte o CSV antes. Não dá para desfazer.","Apagar tudo").then(ok=>{if(ok){const au=db.config.autor;db=fresh();FOTOS={};saveFotos();db.config.autor=au;persist(true);render();toast("Dados apagados")}});break;
  }});
 /* ================== MODO OFFLINE (só na versão instalável) ================== */
 const IS_PWA=!!window.PWA_BUILD&&/^https?:$/.test(location.protocol);
